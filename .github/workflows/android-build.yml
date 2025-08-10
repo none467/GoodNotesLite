@@ -22,17 +22,18 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Build debug APK
+       - name: Build debug APK
         run: |
           mkdir -p build_outputs
           if [ -f ./gradlew ]; then
             chmod +x ./gradlew
-            ./gradlew assembleDebug --no-daemon --stacktrace --info
+            ./gradlew assembleDebug --no-daemon --stacktrace --info --debug
           else
-            gradle assembleDebug --no-daemon --stacktrace --info
+            gradle assembleDebug --no-daemon --stacktrace --info --debug
           fi
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
+
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
