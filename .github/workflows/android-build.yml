@@ -1,0 +1,73 @@
+name: Build Debug APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install required packages (Gradle)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gradle unzip
+
+      - name: Build debug APK
+        run: |
+          mkdir -p build_outputs
+          # Use gradle (system) to build. If project requires wrapper it will still work if present.
+          gradle -v
+          gradle assembleDebug --no-daemon
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME }}
+
+      - name: Find APK and upload artifact (dated name)
+        id: upload
+        run: |
+          APK_PATH=$(find . -type f -path "*/app/build/outputs/apk/debug/*.apk" | head -n1)
+          if [ -z "$APK_PATH" ]; then
+            echo "APK not found"; exit 1
+          fi
+          DATETIME=$(date -u +"%Y-%m-%d-%H%M")
+          FNAME="GoodNotesLite-${DATETIME}.apk"
+          echo "APK_PATH=$APK_PATH" >> $GITHUB_OUTPUT
+          echo "FNAME=$FNAME" >> $GITHUB_OUTPUT
+          cp "$APK_PATH" "./build_outputs/$FNAME"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GoodNotesLite-apk
+          path: build_outputs/*
+          retention-days: 30
+
+      - name: Cleanup old artifacts (keep last 5)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Fetch artifacts list and delete older ones keeping last 5
+          echo "Fetching artifacts..."
+          artifacts_json=$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/$REPO/actions/artifacts")
+          ids=$(echo "$artifacts_json" | python3 -c "import sys, json; a=json.load(sys.stdin); arts=a.get('artifacts',[]); arts=sorted(arts, key=lambda x: x['created_at'], reverse=True); ids=[str(x['id']) for x in arts]; print('\n'.join(ids))")
+          total=$(echo "$ids" | wc -l)
+          if [ "$total" -le 5 ]; then echo "No cleanup needed (<=5 artifacts)"; exit 0; fi
+          echo "Total artifacts: $total"
+          # Skip first 5, delete the rest
+          to_delete=$(echo "$ids" | tail -n +6)
+          echo "Artifacts to delete: $to_delete"
+          for id in $to_delete; do
+            echo "Deleting artifact $id"
+            curl -s -X DELETE -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$REPO/actions/artifacts/$id"
+          done
