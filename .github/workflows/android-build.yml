@@ -1,25 +1,31 @@
-name: Android Build
+name: Android CI
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build with Gradle
+      - name: Give gradlew permission
+        run: chmod +x gradlew
+
+      - name: Build APK
         run: ./gradlew assembleDebug
 
       - name: Upload APK
